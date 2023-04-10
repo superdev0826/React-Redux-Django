@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% load render_bundle from webpack_loader %}
+
+{% block head %}
+  <title>Links Detail</title>
+{% endblock %}
+
+{% block main %}
+  <div id="app"></div>
+
+  {% render_bundle 'vendors' %}
+  {% render_bundle 'LinksDetail' %}
+  <script>
+    window.render_components({
+      links: {{ links|safe }}
+    });
+  </script>
+{% endblock %}

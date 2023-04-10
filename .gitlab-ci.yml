@@ -1,0 +1,99 @@
+image: python:3.6
+stages:
+  - testing
+  - styling
+  - build
+  - deploy
+
+variables:
+  CONTAINER_DEPLOY_IMAGE: $CI_REGISTRY_IMAGE:$CI_BUILD_REF_NAME
+  CONTAINER_RELEASE_IMAGE: $CI_REGISTRY_IMAGE:latest
+  IMAGE_NAME: django-react-workshop
+
+pages:
+  stage: deploy
+  script:
+  - mkdir .public
+  - cp -r docs/. .public
+  - mv .public public
+  artifacts:
+    paths:
+    - public
+  only:
+  - master
+
+heroku:
+  stage: deploy
+  image: ruby:2.2
+  script:
+    - gem install dpl
+    - cp heroku/webpack.local.config.js ./workshop/front/webpack.local.config.js
+    - cp heroku/webpack.prod.config.js ./workshop/front/webpack.prod.config.js
+    - cp heroku/settings.py ./workshop/workshop/settings.py
+    - cp heroku/package.json ./package.json
+    - cp heroku/yarn.lock ./yarn.lock
+    - cp heroku/deploy.sh ./deploy.sh
+    - cp heroku/Procfile ./Procfile
+    - mkdir -p workshop/links/static
+    - mkdir -p workshop/workshop/static
+    - mkdir -p workshop/front/workshop/static
+    - sed -i -e "s@<Websocket url={LINKS_WS_URL} onMessage={this._onUpdate}/>@@g" workshop/front/src/containers/LinksDetail/index.jsx
+    - dpl --skip_cleanup=true --strategy=api --provider=heroku --app=django-react-workshop --api-key=$HEROKU_API_KEY
+  only:
+  - master
+
+docker_image:
+  stage: build
+  image: docker:git
+  services:
+    - docker:dind
+  script:
+    - VERSION=$(date +"%y%m%d")
+    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
+    - docker pull $CONTAINER_RELEASE_IMAGE || true
+    - docker build --cache-from $CONTAINER_RELEASE_IMAGE -t $CONTAINER_RELEASE_IMAGE .
+    - docker tag $CONTAINER_RELEASE_IMAGE $CI_REGISTRY_IMAGE:$VERSION
+    - docker push $CONTAINER_RELEASE_IMAGE
+    - docker push $CI_REGISTRY_IMAGE:$VERSION
+  only:
+    - master
+
+
+python-testing:
+  stage: testing
+  script:
+    - curl -sL https://deb.nodesource.com/setup_8.x | bash -
+    - apt install -y nodejs npm
+    - ./test.sh -i backend
+  artifacts:
+    paths:
+      - src/htmlcov
+
+react-testing:
+  image: node:8
+  stage: testing
+  script:
+    - ./test.sh -i frontend
+  artifacts:
+    paths:
+      - src/front/coverage
+
+python-lint:
+  stage: styling
+  script:
+    - ./test.sh -i pythonlint
+
+react-lint-report:
+  image: node:8
+  stage: styling
+  script:
+    - ./test.sh -i lint-report
+  artifacts:
+    paths:
+      - src/front/report.html
+
+react-lint:
+  image: node:8
+  stage: styling
+  script:
+    - ./test.sh -i lint

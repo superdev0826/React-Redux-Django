@@ -1,0 +1,16 @@
+node_modules
+*.pyc
+db.sqlite3
+*.mo
+webpack-stats-local.json
+workshop/front/workshop/static/
+workshop/static/
+workshop/front/report.html
+.coverage
+.cache
+htmlcov/
+coverage/
+jest_*
+venv/
+env
+.env
